@@ -13,23 +13,15 @@ export default function UploadPage() {
 
   const startCamera = async () => {
     try {
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-        const constraints: MediaStreamConstraints = {
-        video: isMobile
-            ? { facingMode: "user" } // front camera for mobile
-            : { width: 640, height: 480 }, // smaller video for web
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        }
+      const constraints: MediaStreamConstraints = {
+        video: { facingMode: "user" },
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-        console.error("Error accessing camera:", err);
+      console.error("Error accessing camera:", err);
     }
-    };
+  };
 
   useEffect(() => {
     startCamera();
@@ -48,6 +40,7 @@ export default function UploadPage() {
       if (!blob) return;
       setPhoto(blob);
       setPreview(URL.createObjectURL(blob));
+      setSuccess(false); // reset success when taking a new photo
     }, "image/jpeg");
   };
 
@@ -58,55 +51,86 @@ export default function UploadPage() {
     const formData = new FormData();
     formData.append("file", photo);
 
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (res.ok) setSuccess(true);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) setSuccess(true);
+    } catch (err) {
+      console.error("Upload failed:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (success) {
-    return <p className="p-4 text-green-600">Uploaded successfully ✅</p>;
-  }
+  const handleRetake = () => {
+    setPreview(null);
+    setPhoto(null);
+    setSuccess(false);
+    startCamera(); // restart camera on retake
+  };
 
   return (
-    <div className="p-4">
-      {!preview && (
-        <>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="rounded mx-auto"
-            style={{
-                maxWidth: "640px",   // max width for web
-                maxHeight: "480px",  // max height
-                width: "100%",       // scales down for smaller screens
-                height: "auto",      // keeps aspect ratio
-            }}
-            />
-          <button onClick={takePhoto}>Take Photo</button>
-        </>
+    <div className="p-4 flex flex-col items-center gap-4 min-h-[80vh]">
+      {success && (
+        <p className="p-4 text-green-600 text-center font-semibold">
+          Uploaded successfully ✅
+        </p>
       )}
 
+      {/* Show video if no preview */}
+      {!preview && (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="rounded border border-gray-300 max-w-full max-h-[480px]"
+        />
+      )}
+
+      {/* Show image preview */}
       {preview && (
-        <>
-            <img
-            src={preview}
-            className="rounded mx-auto"
-            style={{ maxWidth: "640px", maxHeight: "480px", width: "100%", height: "auto" }}
-            />
-            <div className="flex gap-2 mt-2 justify-center">
-            <button onClick={() => setPreview(null)}>Retake</button>
-            <button onClick={upload} disabled={loading}>
-                {loading ? "Uploading..." : "Use Photo"}
-            </button>
-            </div>
-        </>
+        <img
+          src={preview}
+          className="rounded border border-gray-300 max-w-full max-h-[480px]"
+        />
+      )}
+
+      <div className="flex gap-4 mt-4">
+        {!preview && (
+          <button
+            onClick={takePhoto}
+            className="px-6 py-2 rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+          >
+            Take Photo
+          </button>
         )}
+
+        {preview && (
+          <button
+            onClick={handleRetake}
+            className="px-6 py-2 rounded-full bg-gray-500 text-white font-semibold hover:bg-gray-600 transition"
+          >
+            Retake
+          </button>
+        )}
+
+        {preview && !success && (
+          <button
+            onClick={upload}
+            disabled={loading}
+            className={`px-6 py-2 rounded-full text-white font-semibold transition ${
+              loading
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+            }`}
+          >
+            {loading ? "Uploading..." : "Use Photo"}
+          </button>
+        )}
+      </div>
 
       <canvas ref={canvasRef} className="hidden" />
     </div>
